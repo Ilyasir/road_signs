@@ -1,24 +1,30 @@
-from fastapi import FastAPI, UploadFile, File, Query
-from fastapi.responses import StreamingResponse, JSONResponse
-from app.utils.detector import detect_image
+from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from PIL import Image
 import io
+import base64
+from app.utils.detector import detect_image
 
 app = FastAPI()
+templates = Jinja2Templates(directory="app/templates")
 
+@app.get("/", response_class=HTMLResponse)
+async def form_get(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.post("/detect/")
-async def detect(file: UploadFile = File(...), confidence: float = Query(0.3, ge=0.0, le=1.0)):
+@app.post("/upload/", response_class=HTMLResponse)
+async def upload(request: Request, file: UploadFile = File(...), confidence: float = Form(...)):
     image_bytes = await file.read()
-    image_with_boxes, labels = detect_image(image_bytes, confidence)
+    img_with_boxes, detected = detect_image(image_bytes, confidence=confidence)
 
     img_io = io.BytesIO()
-    Image.fromarray(image_with_boxes).save(img_io, format="JPEG")
-    img_io.seek(0)
-    return StreamingResponse(img_io, media_type="image/jpeg")
+    Image.fromarray(img_with_boxes).save(img_io, format="JPEG")
+    img_base64 = base64.b64encode(img_io.getvalue()).decode()
 
-@app.post("/detect/json/")
-async def detect_json(file: UploadFile = File(...), confidence: float = Query(0.3, ge=0.0, le=1.0)):
-    image_bytes = await file.read()
-    _, labels = detect_image(image_bytes, confidence)
-    return JSONResponse({"detected": labels})
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "image": img_base64,
+        "labels": detected,
+        "confidence": confidence
+    })

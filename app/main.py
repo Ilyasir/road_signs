@@ -14,9 +14,14 @@ async def form_get(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/upload/", response_class=HTMLResponse)
-async def upload(request: Request, file: UploadFile = File(...), confidence: float = Form(...)):
+async def upload(
+    request: Request,
+    file: UploadFile = File(...),
+    confidence: float = Form(...),
+    show_labels: bool = Form(False)
+):
     image_bytes = await file.read()
-    img_with_boxes, detected = detect_image(image_bytes, confidence=confidence)
+    img_with_boxes, detected, counts = detect_image(image_bytes, confidence=confidence, show_labels=show_labels)
 
     img_io = io.BytesIO()
     Image.fromarray(img_with_boxes).save(img_io, format="JPEG")
@@ -26,5 +31,7 @@ async def upload(request: Request, file: UploadFile = File(...), confidence: flo
         "request": request,
         "image": img_base64,
         "labels": detected,
-        "confidence": confidence
+        "counts": counts,
+        "confidence": confidence,
+        "show_labels": show_labels
     })
